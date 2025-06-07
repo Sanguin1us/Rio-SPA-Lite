@@ -1,4 +1,4 @@
-import path from "node:path";
+import { fileURLToPath, URL } from "node:url"; // <-- MODIFIED LINE
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import tailwindcss from "@tailwindcss/vite";
@@ -9,7 +9,8 @@ export default defineConfig({
   base: "/app/",
   resolve: {
     alias: {
-      "@": path.resolve(new URL(".", import.meta.url).pathname, "./src"),
+      // Use fileURLToPath to ensure the path is correct on all OSes
+      "@": fileURLToPath(new URL("./src", import.meta.url)), // <-- MODIFIED LINE
     },
   },
   server: {
@@ -18,8 +19,6 @@ export default defineConfig({
       "/api": {
         target: "http://127.0.0.1:8000", // Default backend address
         changeOrigin: true,
-        // Optionally rewrite path if needed (e.g., remove /api prefix if backend doesn't expect it)
-        // rewrite: (path) => path.replace(/^\/api/, ''),
       },
     },
   },
