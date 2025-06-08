@@ -153,7 +153,9 @@ def reflection(state: OverallState, config: RunnableConfig) -> ReflectionState:
     configurable = Configuration.from_runnable_config(config)
     # Increment the research loop count and get the reasoning model
     state["research_loop_count"] = state.get("research_loop_count", 0) + 1
-    reasoning_model = state.get("reasoning_model") or configurable.reasoning_model
+    
+    # FIX: Use state reasoning_model OR fall back to Configuration reflection_model
+    reasoning_model = state.get("reasoning_model") or configurable.reflection_model
 
     # Format the prompt
     current_date = get_current_date()
@@ -231,7 +233,9 @@ def finalize_answer(state: OverallState, config: RunnableConfig):
         Dictionary with state update, including running_summary key containing the formatted final summary with sources
     """
     configurable = Configuration.from_runnable_config(config)
-    reasoning_model = state.get("reasoning_model") or configurable.reasoning_model
+    
+    # FIX: Use state reasoning_model OR fall back to Configuration answer_model
+    reasoning_model = state.get("reasoning_model") or configurable.answer_model
 
     # Format the prompt
     current_date = get_current_date()
