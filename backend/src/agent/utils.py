@@ -1,5 +1,7 @@
 from typing import Any, Dict, List
 from langchain_core.messages import AnyMessage, AIMessage, HumanMessage
+import requests
+from bs4 import BeautifulSoup
 
 
 def get_research_topic(messages: List[AnyMessage]) -> str:
@@ -164,3 +166,15 @@ def get_citations(response, resolved_urls_map):
                     pass
         citations.append(citation)
     return citations
+
+
+def fetch_snippet(url: str, max_chars: int = 500) -> str:
+    """Fetch a short text snippet from the given URL."""
+    try:
+        response = requests.get(url, timeout=5)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.text, "html.parser")
+        text = soup.get_text(" ", strip=True)
+        return text[:max_chars]
+    except Exception:
+        return ""

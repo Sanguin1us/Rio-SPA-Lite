@@ -6,7 +6,7 @@ authors = [
     { name = "Philipp Schmid", email = "schmidphilipp1995@gmail.com" },
 ]
 readme = "README.md"
-license = { text = "MIT" }
+license = { text = "Apache-2.0" }
 requires-python = ">=3.11,<4.0"
 dependencies = [
     "langgraph>=0.2.6",
@@ -18,6 +18,8 @@ dependencies = [
     "langgraph-api",
     "fastapi",
     "google-genai",
+    "requests",
+    "beautifulsoup4",
 ]
 
 

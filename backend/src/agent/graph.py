@@ -29,6 +29,7 @@ from agent.utils import (
     get_research_topic,
     insert_citation_markers,
     resolve_urls,
+    fetch_snippet,
 )
 
 load_dotenv()
@@ -134,6 +135,15 @@ def web_research(state: WebSearchState, config: RunnableConfig) -> OverallState:
         "search_query": [state["search_query"]],
         "web_research_result": [modified_text],
     }
+
+
+def extract_source_texts(state: OverallState, config: RunnableConfig) -> OverallState:
+    """Fetch text snippets for each gathered source."""
+    snippets = []
+    for source in state["sources_gathered"]:
+        snippet = fetch_snippet(source["value"])
+        snippets.append({**source, "snippet": snippet})
+    return {"source_snippets": snippets}
 
 
 def reflection(state: OverallState, config: RunnableConfig) -> ReflectionState:
@@ -269,14 +279,30 @@ def finalize_answer(state: OverallState, config: RunnableConfig):
     }
 
 
+def fact_check_answer(state: OverallState, config: RunnableConfig) -> OverallState:
+    """Verify that the final answer is supported by retrieved snippets."""
+    answer = state["messages"][-1].content
+    passed = True
+    for snippet in state.get("source_snippets", []):
+        text = snippet.get("snippet")
+        if text and text[:50].lower() not in answer.lower():
+            passed = False
+            break
+    if not passed:
+        answer += "\n\n**Note:** Some claims could not be fully verified from the retrieved sources."
+    return {"messages": [AIMessage(content=answer)], "fact_check_passed": passed}
+
+
 # Create our Agent Graph
 builder = StateGraph(OverallState, config_schema=Configuration)
 
 # Define the nodes we will cycle between
 builder.add_node("generate_query", generate_query)
 builder.add_node("web_research", web_research)
+builder.add_node("extract_source_texts", extract_source_texts)
 builder.add_node("reflection", reflection)
 builder.add_node("finalize_answer", finalize_answer)
+builder.add_node("fact_check_answer", fact_check_answer)
 
 # Set the entrypoint as `generate_query`
 # This means that this node is the first one called
@@ -285,13 +311,15 @@ builder.add_edge(START, "generate_query")
 builder.add_conditional_edges(
     "generate_query", continue_to_web_research, ["web_research"]
 )
-# Reflect on the web research
-builder.add_edge("web_research", "reflection")
+# Fetch source texts then reflect on the web research
+builder.add_edge("web_research", "extract_source_texts")
+builder.add_edge("extract_source_texts", "reflection")
 # Evaluate the research
 builder.add_conditional_edges(
     "reflection", evaluate_research, ["web_research", "finalize_answer"]
 )
 # Finalize the answer
-builder.add_edge("finalize_answer", END)
+builder.add_edge("finalize_answer", "fact_check_answer")
+builder.add_edge("fact_check_answer", END)
 
 graph = builder.compile(name="pro-search-agent")

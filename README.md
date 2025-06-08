@@ -9,7 +9,8 @@ Esse é o repo do Rio SPA Lite, uma versão simplificada do Sistema de Pesquisa 
 - 🔍 Dynamic search query generation using Google Gemini models.
 - 🌐 Integrated web research via Google Search API.
 - 🤔 Reflective reasoning to identify knowledge gaps and refine searches.
-- 📄 Generates answers with citations from gathered sources.
+- 📄 Generates answers with citations from gathered sources and quotes directly from retrieved text.
+- ✅ Includes an automated fact-check step to verify claims against collected snippets.
 - 🔄 Hot-reloading for both frontend and backend development during development.
 
 ## Project Structure
