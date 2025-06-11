@@ -18,7 +18,6 @@ interface AgentConfiguration {
   answer_model: string;
   number_of_initial_queries: number;
   max_research_loops: number;
-  enable_thinking?: boolean;
 }
 
 interface InputFormProps {
@@ -33,25 +32,21 @@ const MODEL_OPTIONS = [
     value: "gemini-2.0-flash",
     label: "Gemini 2.0 Flash",
     icon: <Zap className="h-4 w-4 text-yellow-400" />,
-    supportsThinking: false,
   },
   {
     value: "gemini-2.5-flash-preview-04-17", 
     label: "Gemini 2.5 Flash",
     icon: <Zap className="h-4 w-4 text-orange-400" />,
-    supportsThinking: true,
   },
   {
     value: "gemini-2.5-pro-preview-05-06",
     label: "Gemini 2.5 Pro (May)",
     icon: <Cpu className="h-4 w-4 text-purple-400" />,
-    supportsThinking: true,
   },
   {
     value: "gemini-2.5-pro-preview-06-05",
     label: "Gemini 2.5 Pro (June)",
     icon: <Cpu className="h-4 w-4 text-purple-500" />,
-    supportsThinking: true,
   },
 ];
 
@@ -78,11 +73,6 @@ export const InputForm: React.FC<InputFormProps> = ({
   const [answerModel, setAnswerModel] = useState("gemini-2.5-flash-preview-04-17");
   const [numberOfQueries, setNumberOfQueries] = useState(3);
   const [maxLoops, setMaxLoops] = useState(3);
-  const [enableThinking, setEnableThinking] = useState(false);
-
-  // Check if any selected model supports thinking
-  const anyModelSupportsThinking = [queryGeneratorModel, reflectionModel, answerModel]
-    .some(model => MODEL_OPTIONS.find(opt => opt.value === model)?.supportsThinking);
 
   const handleInternalSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -94,7 +84,6 @@ export const InputForm: React.FC<InputFormProps> = ({
       answer_model: answerModel,
       number_of_initial_queries: numberOfQueries,
       max_research_loops: maxLoops,
-      enable_thinking: enableThinking && anyModelSupportsThinking,
     };
     
     onSubmit(internalInputValue, config);
@@ -321,24 +310,6 @@ export const InputForm: React.FC<InputFormProps> = ({
                   className="bg-transparent border-neutral-600 text-neutral-100"
                 />
               </div>
-
-              {/* Thinking mode toggle */}
-              {anyModelSupportsThinking && (
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs text-neutral-400">Thinking Mode</label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={enableThinking}
-                      onChange={(e) => setEnableThinking(e.target.checked)}
-                      className="rounded border-neutral-600 bg-transparent"
-                    />
-                    <span className="text-sm text-neutral-300">
-                      Enable reasoning traces
-                    </span>
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* Configuration summary */}
@@ -346,9 +317,6 @@ export const InputForm: React.FC<InputFormProps> = ({
               <div className="text-xs text-neutral-400 space-y-1">
                 <div>Models: {queryGeneratorModel.split('-')[1]} → {reflectionModel.split('-')[1]} → {answerModel.split('-')[1]}</div>
                 <div>Research: {numberOfQueries} initial queries, up to {maxLoops} loops</div>
-                {enableThinking && anyModelSupportsThinking && (
-                  <div className="text-yellow-400">⚡ Thinking mode enabled</div>
-                )}
               </div>
             </div>
           </div>

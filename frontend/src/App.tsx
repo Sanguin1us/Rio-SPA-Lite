@@ -12,7 +12,6 @@ interface AgentConfiguration {
   answer_model: string;
   number_of_initial_queries: number;
   max_research_loops: number;
-  enable_thinking?: boolean;
 }
 
 export default function App() {
@@ -213,7 +212,6 @@ export default function App() {
             answer_model: config.answer_model,
             number_of_initial_queries: config.number_of_initial_queries,
             max_research_loops: config.max_research_loops,
-            enable_thinking: config.enable_thinking || false,
           },
         }
       );

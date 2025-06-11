@@ -39,29 +39,6 @@ if os.getenv("GEMINI_API_KEY") is None:
 # Used for Google Search API
 genai_client = Client(api_key=os.getenv("GEMINI_API_KEY"))
 
-# Models that support thinking mode
-THINKING_MODELS = {
-    "gemini-2.5-flash-preview-04-17",
-    "gemini-2.5-pro-preview-05-06", 
-    "gemini-2.5-pro-preview-06-05"
-}
-
-
-def _get_model_kwargs(model_name: str, enable_thinking: bool = False) -> dict:
-    """Get model kwargs including thinking mode if supported and enabled."""
-    kwargs = {
-        "model": model_name,
-        "temperature": 1.0,
-        "max_retries": 2,
-        "api_key": os.getenv("GEMINI_API_KEY"),
-    }
-    
-    # Only enable thinking if model supports it and it's requested
-    if enable_thinking and model_name in THINKING_MODELS:
-        kwargs["model_kwargs"] = {"include_thinking": True}
-    
-    return kwargs
-
 
 # Nodes
 def generate_query(state: OverallState, config: RunnableConfig) -> QueryGenerationState:
@@ -82,12 +59,13 @@ def generate_query(state: OverallState, config: RunnableConfig) -> QueryGenerati
     # Use configuration value, fallback to state, then to default
     number_of_queries = configurable.number_of_initial_queries
 
-    # init Query Generation Model with thinking mode if enabled
-    model_kwargs = _get_model_kwargs(
-        configurable.query_generator_model, 
-        configurable.enable_thinking
+    # init Query Generation Model
+    llm = ChatGoogleGenerativeAI(
+        model=configurable.query_generator_model,
+        temperature=1.0,
+        max_retries=2,
+        api_key=os.getenv("GEMINI_API_KEY"),
     )
-    llm = ChatGoogleGenerativeAI(**model_kwargs)
     structured_llm = llm.with_structured_output(SearchQueryList)
 
     # Format the prompt
@@ -136,7 +114,6 @@ def web_research(state: WebSearchState, config: RunnableConfig) -> OverallState:
     model_name = configurable.query_generator_model
     
     # Use the google genai client as the langchain client doesn't return grounding metadata
-    # Note: Thinking mode doesn't work with the genai client's generate_content method
     response = genai_client.models.generate_content(
         model=model_name,
         contents=formatted_prompt,
@@ -187,12 +164,13 @@ def reflection(state: OverallState, config: RunnableConfig) -> ReflectionState:
         summaries="\n\n---\n\n".join(state["web_research_result"]),
     )
     
-    # init Reflection Model with thinking mode if enabled
-    model_kwargs = _get_model_kwargs(
-        configurable.reflection_model, 
-        configurable.enable_thinking
+    # init Reflection Model
+    llm = ChatGoogleGenerativeAI(
+        model=configurable.reflection_model,
+        temperature=1.0,
+        max_retries=2,
+        api_key=os.getenv("GEMINI_API_KEY"),
     )
-    llm = ChatGoogleGenerativeAI(**model_kwargs)
     result = llm.with_structured_output(Reflection).invoke(formatted_prompt)
 
     return {
@@ -266,12 +244,13 @@ def finalize_answer(state: OverallState, config: RunnableConfig):
         summaries="\n---\n\n".join(state["web_research_result"]),
     )
 
-    # init Answer Model with thinking mode if enabled
-    model_kwargs = _get_model_kwargs(
-        configurable.answer_model, 
-        configurable.enable_thinking
+    # init Answer Model
+    llm = ChatGoogleGenerativeAI(
+        model=configurable.answer_model,
+        temperature=1.0,
+        max_retries=2,
+        api_key=os.getenv("GEMINI_API_KEY"),
     )
-    llm = ChatGoogleGenerativeAI(**model_kwargs)
     result = llm.invoke(formatted_prompt)
 
     # Replace the short urls with the original urls and add all used urls to the sources_gathered

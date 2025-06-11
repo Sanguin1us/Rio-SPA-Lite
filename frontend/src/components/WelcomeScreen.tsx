@@ -7,7 +7,6 @@ interface AgentConfiguration {
   answer_model: string;
   number_of_initial_queries: number;
   max_research_loops: number;
-  enable_thinking?: boolean;
 }
 
 interface WelcomeScreenProps {
