@@ -39,6 +39,13 @@ class Configuration(BaseModel):
         metadata={"description": "The maximum number of research loops to perform."},
     )
 
+    enable_thinking: bool = Field(
+        default=False,
+        metadata={
+            "description": "Enable thinking mode for compatible models. Only works with certain Gemini models."
+        },
+    )
+
     @classmethod
     def from_runnable_config(
         cls, config: Optional[RunnableConfig] = None
@@ -56,5 +63,10 @@ class Configuration(BaseModel):
 
         # Filter out None values
         values = {k: v for k, v in raw_values.items() if v is not None}
+
+        # Handle boolean conversion for enable_thinking
+        if "enable_thinking" in values:
+            if isinstance(values["enable_thinking"], str):
+                values["enable_thinking"] = values["enable_thinking"].lower() in ('true', '1', 'yes', 'on')
 
         return cls(**values)

@@ -5,6 +5,16 @@ import { ProcessedEvent } from "@/components/ActivityTimeline";
 import { WelcomeScreen } from "@/components/WelcomeScreen";
 import { ChatMessagesView } from "@/components/ChatMessagesView";
 
+// Configuration interface matching backend
+interface AgentConfiguration {
+  query_generator_model: string;
+  reflection_model: string;
+  answer_model: string;
+  number_of_initial_queries: number;
+  max_research_loops: number;
+  enable_thinking?: boolean;
+}
+
 export default function App() {
   const [processedEventsTimeline, setProcessedEventsTimeline] = useState<
     ProcessedEvent[]
@@ -17,9 +27,6 @@ export default function App() {
 
   const thread = useStream<{
     messages: Message[];
-    initial_search_query_count: number;
-    max_research_loops: number;
-    reasoning_model: string;
   }>({
     apiUrl: import.meta.env.DEV
       ? "http://localhost:2024"
@@ -178,33 +185,12 @@ export default function App() {
   }, [thread.messages, thread.isLoading, processedEventsTimeline]);
 
   const handleSubmit = useCallback(
-    (submittedInputValue: string, effort: string, model: string) => {
+    (submittedInputValue: string, config: AgentConfiguration) => {
       if (!submittedInputValue.trim()) return;
       
       console.log("Submitting new request, clearing timeline"); // Debug log
       setProcessedEventsTimeline([]);
       hasFinalizeEventOccurredRef.current = false;
-
-      // convert effort to, initial_search_query_count and max_research_loops
-      // low means max 1 loop and 1 query
-      // medium means max 3 loops and 3 queries
-      // high means max 10 loops and 5 queries
-      let initial_search_query_count = 0;
-      let max_research_loops = 0;
-      switch (effort) {
-        case "low":
-          initial_search_query_count = 1;
-          max_research_loops = 1;
-          break;
-        case "medium":
-          initial_search_query_count = 3;
-          max_research_loops = 3;
-          break;
-        case "high":
-          initial_search_query_count = 5;
-          max_research_loops = 10;
-          break;
-      }
 
       const newMessages: Message[] = [
         ...(thread.messages || []),
@@ -215,18 +201,22 @@ export default function App() {
         },
       ];
       
-      console.log("Submitting with config:", {
-        initial_search_query_count,
-        max_research_loops,
-        reasoning_model: model
-      }); // Debug log
+      console.log("Submitting with config:", config); // Debug log
       
-      thread.submit({
-        messages: newMessages,
-        initial_search_query_count: initial_search_query_count,
-        max_research_loops: max_research_loops,
-        reasoning_model: model,
-      });
+      // Submit with messages and configuration
+      thread.submit(
+        { messages: newMessages },
+        {
+          configurable: {
+            query_generator_model: config.query_generator_model,
+            reflection_model: config.reflection_model,
+            answer_model: config.answer_model,
+            number_of_initial_queries: config.number_of_initial_queries,
+            max_research_loops: config.max_research_loops,
+            enable_thinking: config.enable_thinking || false,
+          },
+        }
+      );
     },
     [thread]
   );

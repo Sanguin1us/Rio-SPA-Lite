@@ -1,10 +1,19 @@
 import { InputForm } from "./InputForm";
 
+// Configuration interface matching backend
+interface AgentConfiguration {
+  query_generator_model: string;
+  reflection_model: string;
+  answer_model: string;
+  number_of_initial_queries: number;
+  max_research_loops: number;
+  enable_thinking?: boolean;
+}
+
 interface WelcomeScreenProps {
   handleSubmit: (
     submittedInputValue: string,
-    effort: string,
-    model: string
+    config: AgentConfiguration
   ) => void;
   onCancel: () => void;
   isLoading: boolean;

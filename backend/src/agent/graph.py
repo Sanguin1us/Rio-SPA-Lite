@@ -39,12 +39,35 @@ if os.getenv("GEMINI_API_KEY") is None:
 # Used for Google Search API
 genai_client = Client(api_key=os.getenv("GEMINI_API_KEY"))
 
+# Models that support thinking mode
+THINKING_MODELS = {
+    "gemini-2.5-flash-preview-04-17",
+    "gemini-2.5-pro-preview-05-06", 
+    "gemini-2.5-pro-preview-06-05"
+}
+
+
+def _get_model_kwargs(model_name: str, enable_thinking: bool = False) -> dict:
+    """Get model kwargs including thinking mode if supported and enabled."""
+    kwargs = {
+        "model": model_name,
+        "temperature": 1.0,
+        "max_retries": 2,
+        "api_key": os.getenv("GEMINI_API_KEY"),
+    }
+    
+    # Only enable thinking if model supports it and it's requested
+    if enable_thinking and model_name in THINKING_MODELS:
+        kwargs["model_kwargs"] = {"include_thinking": True}
+    
+    return kwargs
+
 
 # Nodes
 def generate_query(state: OverallState, config: RunnableConfig) -> QueryGenerationState:
     """LangGraph node that generates a search queries based on the User's question.
 
-    Uses Gemini 2.0 Flash to create an optimized search query for web research based on
+    Uses the configured model to create optimized search queries for web research based on
     the User's question.
 
     Args:
@@ -56,17 +79,15 @@ def generate_query(state: OverallState, config: RunnableConfig) -> QueryGenerati
     """
     configurable = Configuration.from_runnable_config(config)
 
-    # check for custom initial search query count
-    if state.get("initial_search_query_count") is None:
-        state["initial_search_query_count"] = configurable.number_of_initial_queries
+    # Use configuration value, fallback to state, then to default
+    number_of_queries = configurable.number_of_initial_queries
 
-    # init Gemini 2.0 Flash
-    llm = ChatGoogleGenerativeAI(
-        model=configurable.query_generator_model,
-        temperature=1.0,
-        max_retries=2,
-        api_key=os.getenv("GEMINI_API_KEY"),
+    # init Query Generation Model with thinking mode if enabled
+    model_kwargs = _get_model_kwargs(
+        configurable.query_generator_model, 
+        configurable.enable_thinking
     )
+    llm = ChatGoogleGenerativeAI(**model_kwargs)
     structured_llm = llm.with_structured_output(SearchQueryList)
 
     # Format the prompt
@@ -74,7 +95,7 @@ def generate_query(state: OverallState, config: RunnableConfig) -> QueryGenerati
     formatted_prompt = query_writer_instructions.format(
         current_date=current_date,
         research_topic=get_research_topic(state["messages"]),
-        number_queries=state["initial_search_query_count"],
+        number_queries=number_of_queries,
     )
     # Generate the search queries
     result = structured_llm.invoke(formatted_prompt)
@@ -95,7 +116,7 @@ def continue_to_web_research(state: QueryGenerationState):
 def web_research(state: WebSearchState, config: RunnableConfig) -> OverallState:
     """LangGraph node that performs web research using the native Google Search API tool.
 
-    Executes a web search using the native Google Search API tool in combination with Gemini 2.0 Flash.
+    Executes a web search using the native Google Search API tool in combination with the configured model.
 
     Args:
         state: Current graph state containing the search query and research loop count
@@ -111,9 +132,13 @@ def web_research(state: WebSearchState, config: RunnableConfig) -> OverallState:
         research_topic=state["search_query"],
     )
 
-    # Uses the google genai client as the langchain client doesn't return grounding metadata
+    # Use query generator model for web research (could be made configurable separately)
+    model_name = configurable.query_generator_model
+    
+    # Use the google genai client as the langchain client doesn't return grounding metadata
+    # Note: Thinking mode doesn't work with the genai client's generate_content method
     response = genai_client.models.generate_content(
-        model=configurable.query_generator_model,
+        model=model_name,
         contents=formatted_prompt,
         config={
             "tools": [{"google_search": {}}],
@@ -153,9 +178,6 @@ def reflection(state: OverallState, config: RunnableConfig) -> ReflectionState:
     configurable = Configuration.from_runnable_config(config)
     # Increment the research loop count and get the reasoning model
     state["research_loop_count"] = state.get("research_loop_count", 0) + 1
-    
-    # FIX: Use state reasoning_model OR fall back to Configuration reflection_model
-    reasoning_model = state.get("reasoning_model") or configurable.reflection_model
 
     # Format the prompt
     current_date = get_current_date()
@@ -164,13 +186,13 @@ def reflection(state: OverallState, config: RunnableConfig) -> ReflectionState:
         research_topic=get_research_topic(state["messages"]),
         summaries="\n\n---\n\n".join(state["web_research_result"]),
     )
-    # init Reasoning Model
-    llm = ChatGoogleGenerativeAI(
-        model=reasoning_model,
-        temperature=1.0,
-        max_retries=2,
-        api_key=os.getenv("GEMINI_API_KEY"),
+    
+    # init Reflection Model with thinking mode if enabled
+    model_kwargs = _get_model_kwargs(
+        configurable.reflection_model, 
+        configurable.enable_thinking
     )
+    llm = ChatGoogleGenerativeAI(**model_kwargs)
     result = llm.with_structured_output(Reflection).invoke(formatted_prompt)
 
     return {
@@ -199,14 +221,16 @@ def evaluate_research(
         String literal indicating the next node to visit ("web_research" or "finalize_summary")
     """
     configurable = Configuration.from_runnable_config(config)
-    max_research_loops = (
-        state.get("max_research_loops")
-        if state.get("max_research_loops") is not None
-        else configurable.max_research_loops
-    )
+    max_research_loops = configurable.max_research_loops
+    
     if state["is_sufficient"] or state["research_loop_count"] >= max_research_loops:
         return "finalize_answer"
     else:
+        # Ensure follow_up_queries is not None and is iterable
+        follow_up_queries = state.get("follow_up_queries", [])
+        if follow_up_queries is None:
+            follow_up_queries = []
+            
         return [
             Send(
                 "web_research",
@@ -215,7 +239,7 @@ def evaluate_research(
                     "id": state["number_of_ran_queries"] + int(idx),
                 },
             )
-            for idx, follow_up_query in enumerate(state["follow_up_queries"])
+            for idx, follow_up_query in enumerate(follow_up_queries)
         ]
 
 
@@ -233,9 +257,6 @@ def finalize_answer(state: OverallState, config: RunnableConfig):
         Dictionary with state update, including running_summary key containing the formatted final summary with sources
     """
     configurable = Configuration.from_runnable_config(config)
-    
-    # FIX: Use state reasoning_model OR fall back to Configuration answer_model
-    reasoning_model = state.get("reasoning_model") or configurable.answer_model
 
     # Format the prompt
     current_date = get_current_date()
@@ -245,13 +266,12 @@ def finalize_answer(state: OverallState, config: RunnableConfig):
         summaries="\n---\n\n".join(state["web_research_result"]),
     )
 
-    # init Reasoning Model, default to Gemini 2.5 Flash
-    llm = ChatGoogleGenerativeAI(
-        model=reasoning_model,
-        temperature=0,
-        max_retries=2,
-        api_key=os.getenv("GEMINI_API_KEY"),
+    # init Answer Model with thinking mode if enabled
+    model_kwargs = _get_model_kwargs(
+        configurable.answer_model, 
+        configurable.enable_thinking
     )
+    llm = ChatGoogleGenerativeAI(**model_kwargs)
     result = llm.invoke(formatted_prompt)
 
     # Replace the short urls with the original urls and add all used urls to the sources_gathered
